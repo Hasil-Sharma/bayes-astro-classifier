@@ -9,6 +9,7 @@ from scipy.optimize import minimize,fmin
 import numpy as np
 import scipy.stats as st
 import csv
+import sys
 from matplotlib import pyplot as plt
 # Model is fit in 4 steps:
 # 1. Fit Gaussian mixture model for ClassStat noise distribution by ML
@@ -705,7 +706,7 @@ mmm = np.max([(np.max(lasdat[:,5][lasdat[:,31]==0])),\
 for band in xrange(0,3):
 	if band == 0:
 		init = [18,6]
-		x = lasdatrv[lasdatrv[:,31]==0,init]
+		xx = lasdatrv[lasdatrv[:,31]==0]
 		MagPars = MagParsGl
 		Mshift=mmagshift['y']
 		starparas=starpars['y']
@@ -914,28 +915,28 @@ for band in xrange(0,3):
 mcheck = 18.5
 band = 0
 if band==0:
-	dtemp = lasdat[lasdat[:,31]==0 & lasdat[:,5]<mcheck+0.1 & lasdat[:,5]>mcheck-0.1]
+	dtemp = lasdat[lasdat[:,31]==0 & lasdat[:,5]<mcheck+0.1 & lasdat[:,5]>mcheck-0.1,:]
 	mcheck = np.mean(dtemp[:,5])
 	MagPars = MagParsGl
 	Mshift = mmagshift['y']
 	mm = np.max(lasdat[:,5][lasdat[:,31]==0])
 	starparas = starpars['y']
 if band==1:
-	dtemp = lasdat[lasdat[:,32]==0 & lasdat[:,7]<mcheck+0.1 & lasdat[:,5]>mcheck-0.1]
+	dtemp = lasdat[lasdat[:,32]==0 & lasdat[:,7]<mcheck+0.1 & lasdat[:,5]>mcheck-0.1,:]
 	mcheck = np.mean(dtemp[:,7])
 	MagPars = MagParsGl
 	Mshift = mmagshift['j']
 	mm = np.max(lasdat[:,7][lasdat[:,32]==0])
 	starparas = starpars['j']
 if band==2:
-	dtemp = lasdat[lasdat[:,33]==0 & lasdat[:,9]<mcheck+0.1 & lasdat[:,5]>mcheck-0.1]
+	dtemp = lasdat[lasdat[:,33]==0 & lasdat[:,9]<mcheck+0.1 & lasdat[:,5]>mcheck-0.1,:]
 	mcheck = np.mean(dtemp[:,9])
 	MagPars = MagParsGl
 	Mshift = mmagshift['h']
 	mm = np.max(lasdat[:,9][lasdat[:,33]==0])
 	starparas = starpars['h']
 if band==3:
-	dtemp = lasdat[lasdat[:,34]==0 & lasdat[:,11]<mcheck+0.1 & lasdat[:,5]>mcheck-0.1]
+	dtemp = lasdat[lasdat[:,34]==0 & lasdat[:,11]<mcheck+0.1 & lasdat[:,5]>mcheck-0.1,:]
 	mcheck = np.mean(dtemp[:,11])
 	MagPars = MagParsGl
 	Mshift = mmagshift['k']
@@ -978,8 +979,414 @@ pdfcs = (MxCfGl(mcheck+Mshift))*dstar(cs,starparas) + (1-MxCfGl(mcheck+Mshift))*
 pdfcsN = (MxCfGl(mcheck+Mshift))*dstar(cs,starparas)
 pdfcsLN = (1-MxCfGl(mcheck+Mshift))*galoc_val
 
+if band==0:
+	plt.hist(dtemp[:,17])
 if band==1:
-	plt.hist(dtemp['cs_y'])
+	plt.hist(dtemp[:,18])
+if band==2:
+	plt.hist(dtemp[:,19])
+if band==3:
+	plt.hist(dtemp[:,20])	
+
+#?lines()
+
+
+########################################################
+##SINGLE BAND CLASSIFICATIONS WITH TURE LOCATION MODEL##
+########################################################
+
+pStar = {'y':0.0,'j':0.0,'h':0.0,'k':0.0}
+Ncols = 250.0
+pr = np.arange(0,1,1/(Ncols+1))
+rnk = {'y':0.0,'j':0.0,'h':0.0,'k':0.0}
 	
+for band in xrange(0,3):
+	if band==0:
+		starparas = starpars['y']
+		pa = MedPars
+		mmm = np.max([(np.max(lasdat[:,5][lasdat[:,31]==0])),\
+		(np.max(lasdat[:,7][lasdat[:,32]==0])+pa[5]-pa[6]),\
+		(np.max(lasdat[:,9][lasdat[:,33]==0])+pa[5]-pa[7]),\
+		(np.max(lasdat[:,11][lasdat[:,34]==0])+pa[5]-pa[8])])
+		MagPars = MagParsGl
+		Mshift = mmagshift['y']
+		mm = np.max(lasdat[:,5][lasdat[:,31]==0])
+		mu = (1-(lasdat[:,5]+Mshift)/mmm)*((pa[0]*(lasdat[:,5]-(pa[5]-Mshift))**2+\
+				               pa[1]*(lasdat[:,5]-(pa[5]-Mshift))+pa[2])^pa[5]+pa[4])		
+		mu[mu<0.01] = 0.01
+		rho = VarPars.x[0]*(10**5)*(10**(VarPars.x[1]*(lasdat[:,5]+Mshift-11)))
+		def galoc_fun(x,cs,mu0,rho0):
+			res = dlnorm(x,np.log(mu0)-((1/2)*np.log(1 + rho0/(mu0**2))),np.sqrt(np.log(1+rho0/(mu0**2))))\
+				*dstar(cs-x,starparas)
+			return res
+		
+		def galoc_intfun(para):
+			cs = para[0]
+			mu0 = para[2]
+			rho0 = para[3]
+			res = integrate.quad(galoc_fun,-10,70,args=(cs,mu0,rho0))
+			return res		
+		galoc_val = np.zeros(len(mu))
+		ii = np.arange(0,len(mu),1)
+		for i in ii:
+			galoc_val[i] = galoc_intfun([lasdat[:,17][i],lasdat[:,5][i],mu[i],rho[i]])
+		
+		pS = (MxCfGl(lasdat[:,5]+mmagshift['y']))*dstar(lasdat[:,17],starparas)
+		pG = (1-MxCfGl(lasdat[:,5]+mmagshift['y']))*galoc_val
+		pStar['y'] = pS/(pS+pG)
+		pStar['y'][lasdat[:,31]==1] = np.repeat(0.0,np.sum(lasdat[:,31]==1))
+		
+		##plot
+		
+		rnk['y'] = np.repeat(0.0,len(lasdat))
+		ii = np.arange(0,Ncols,1)
+		for i in ii:
+			rnk['y'][lasdat[:,31]==0 & pStar['y']>=pr[i] & pStar['y']<pr[i+1]] = i
+		
+		rnk['y'][lasdat[:,31]==0 & pStar['y']==1] = Ncols
+		dtemp = lasdat[lasdat[:,31]==0,:]
+		plt.scatter(dtemp[:,17],dtemp[:,5],s=Ncols,c=rnk['y'][lasdat[:,31]==0])
+		plt.xlim(-25,65)
+		plt.ylim(22.1,11.25)
+		plt.xlabel("cs_Y")
+		plt.ylabel("m_Y")
+	if band==1:
+		starparas = starpars['j']
+		pa = MedPars
+		mmm = np.max([(np.max(lasdat[:,5][lasdat[:,31]==0])),\
+		(np.max(lasdat[:,7][lasdat[:,32]==0])+pa[5]-pa[6]),\
+		(np.max(lasdat[:,9][lasdat[:,33]==0])+pa[5]-pa[7]),\
+		(np.max(lasdat[:,11][lasdat[:,34]==0])+pa[5]-pa[8])])
+		MagPars = MagParsGl
+		Mshift = mmagshift['j']
+		mm = np.max(lasdat[:,7][lasdat[:,32]==0])
+		mu = (1-(lasdat[:,7]+Mshift)/mmm)*((pa[0]*(lasdat[:,7]-(pa[5]-Mshift))**2+\
+			                       pa[1]*(lasdat[:,7]-(pa[5]-Mshift))+pa[2])^pa[5]+pa[4])		
+		mu[mu<0.01] = 0.01
+		rho = VarPars.x[0]*(10**5)*(10**(VarPars.x[1]*(lasdat[:,7]+Mshift-11)))
+		def galoc_fun(x,cs,mu0,rho0):
+			res = dlnorm(x,np.log(mu0)-((1/2)*np.log(1 + rho0/(mu0**2))),np.sqrt(np.log(1+rho0/(mu0**2))))\
+				*dstar(cs-x,starparas)
+			return res
+		
+		def galoc_intfun(para):
+			cs = para[0]
+			mu0 = para[2]
+			rho0 = para[3]
+			res = integrate.quad(galoc_fun,-10,70,args=(cs,mu0,rho0))
+			return res		
+		galoc_val = np.zeros(len(mu))
+		ii = np.arange(0,len(mu),1)
+		for i in ii:
+			galoc_val[i] = galoc_intfun([lasdat[:,18][i],lasdat[:,7][i],mu[i],rho[i]])
+			
+		pS = (MxCfGl(lasdat[:,7]+mmagshift['j']))*dstar(lasdat[:,18],starparas)
+		pG = (1-MxCfGl(lasdat[:,7]+mmagshift['j']))*galoc_val
+		pStar['j'] = pS/(pS+pG)
+		pStar['j'][lasdat[:,32]==1] = np.repeat(0.0,np.sum(lasdat[:,32]==1))
+			
+		##plot
+		
+		rnk['j'] = np.repeat(0.0,len(lasdat))
+		ii = np.arange(0,Ncols,1)
+		for i in ii:
+			rnk['j'][lasdat[:,32]==0 & pStar['j']>=pr[i] & pStar['j']<pr[i+1]] = i
+		
+		rnk['j'][lasdat[:,32]==0 & pStar['j']==1] = Ncols
+		dtemp = lasdat[lasdat[:,32]==0,:]
+		plt.scatter(dtemp[:,18],dtemp[:,7],s=Ncols,c=rnk['j'][lasdat[:,32]==0])
+		plt.xlim(-25,65)
+		plt.ylim(22.1,11.25)
+		plt.xlabel("cs_J")
+		plt.ylabel("m_J")
+	if band==2:
+		starparas = starpars['h']
+		pa = MedPars
+		mmm = np.max([(np.max(lasdat[:,5][lasdat[:,31]==0])),\
+		(np.max(lasdat[:,7][lasdat[:,32]==0])+pa[5]-pa[6]),\
+		(np.max(lasdat[:,9][lasdat[:,33]==0])+pa[5]-pa[7]),\
+		(np.max(lasdat[:,11][lasdat[:,34]==0])+pa[5]-pa[8])])
+		MagPars = MagParsGl
+		Mshift = mmagshift['h']
+		mm = np.max(lasdat[:,9][lasdat[:,33]==0])
+		mu = (1-(lasdat[:,9]+Mshift)/mmm)*((pa[0]*(lasdat[:,9]-(pa[5]-Mshift))**2+\
+			                       pa[1]*(lasdat[:,9]-(pa[5]-Mshift))+pa[2])^pa[5]+pa[4])		
+		mu[mu<0.01] = 0.01
+		rho = VarPars.x[0]*(10**5)*(10**(VarPars.x[1]*(lasdat[:,9]+Mshift-11)))
+		def galoc_fun(x,cs,mu0,rho0):
+			res = dlnorm(x,np.log(mu0)-((1/2)*np.log(1 + rho0/(mu0**2))),np.sqrt(np.log(1+rho0/(mu0**2))))\
+				*dstar(cs-x,starparas)
+			return res
+			
+		def galoc_intfun(para):
+			cs = para[0]
+			mu0 = para[2]
+			rho0 = para[3]
+			res = integrate.quad(galoc_fun,-10,70,args=(cs,mu0,rho0))
+			return res		
+		galoc_val = np.zeros(len(mu))
+		ii = np.arange(0,len(mu),1)
+		for i in ii:
+			galoc_val[i] = galoc_intfun([lasdat[:,19][i],lasdat[:,9][i],mu[i],rho[i]])
+			
+		pS = (MxCfGl(lasdat[:,9]+mmagshift['h']))*dstar(lasdat[:,19],starparas)
+		pG = (1-MxCfGl(lasdat[:,9]+mmagshift['h']))*galoc_val
+		pStar['h'] = pS/(pS+pG)
+		pStar['h'][lasdat[:,33]==1] = np.repeat(0.0,np.sum(lasdat[:,33]==1))
+			
+		##plot
+			
+		rnk['h'] = np.repeat(0.0,len(lasdat))
+		ii = np.arange(0,Ncols,1)
+		for i in ii:
+			rnk['h'][lasdat[:,33]==0 & pStar['h']>=pr[i] & pStar['h']<pr[i+1]] = i
+		
+		rnk['h'][lasdat[:,33]==0 & pStar['h']==1] = Ncols
+		dtemp = lasdat[lasdat[:,33]==0,:]
+		plt.scatter(dtemp[:,19],dtemp[:,9],s=Ncols,c=rnk['h'][lasdat[:,33]==0])
+		plt.xlim(-25,65)
+		plt.ylim(20.1,11.1)
+		plt.xlabel("cs_H")
+		plt.ylabel("m_H")
+	if band==3:
+		starparas = starpars['k']
+		pa = MedPars
+		mmm = np.max([(np.max(lasdat[:,5][lasdat[:,31]==0])),\
+		(np.max(lasdat[:,7][lasdat[:,32]==0])+pa[5]-pa[6]),\
+		(np.max(lasdat[:,9][lasdat[:,33]==0])+pa[5]-pa[7]),\
+		(np.max(lasdat[:,11][lasdat[:,34]==0])+pa[5]-pa[8])])
+		MagPars = MagParsGl
+		Mshift = mmagshift['k']
+		mm = np.max(lasdat[:,11][lasdat[:,34]==0])
+		mu = (1-(lasdat[:,11]+Mshift)/mmm)*((pa[0]*(lasdat[:,11]-(pa[5]-Mshift))**2+\
+			                       pa[1]*(lasdat[:,11]-(pa[5]-Mshift))+pa[2])^pa[5]+pa[4])		
+		mu[mu<0.01] = 0.01
+		rho = VarPars.x[0]*(10**5)*(10**(VarPars.x[1]*(lasdat[:,11]+Mshift-11)))
+		def galoc_fun(x,cs,mu0,rho0):
+			res = dlnorm(x,np.log(mu0)-((1/2)*np.log(1 + rho0/(mu0**2))),np.sqrt(np.log(1+rho0/(mu0**2))))\
+				*dstar(cs-x,starparas)
+			return res
+			
+		def galoc_intfun(para):
+			cs = para[0]
+			mu0 = para[2]
+			rho0 = para[3]
+			res = integrate.quad(galoc_fun,-10,70,args=(cs,mu0,rho0))
+			return res		
+		galoc_val = np.zeros(len(mu))
+		ii = np.arange(0,len(mu),1)
+		for i in ii:
+			galoc_val[i] = galoc_intfun([lasdat[:,20][i],lasdat[:,11][i],mu[i],rho[i]])
+			
+		pS = (MxCfGl(lasdat[:,11]+mmagshift['k']))*dstar(lasdat[:,20],starparas)
+		pG = (1-MxCfGl(lasdat[:,11]+mmagshift['k']))*galoc_val
+		pStar['k'] = pS/(pS+pG)
+		pStar['k'][lasdat[:,34]==1] = np.repeat(0.0,np.sum(lasdat[:,34]==1))
+			
+		##plot
+			
+		rnk['k'] = np.repeat(0.0,len(lasdat))
+		ii = np.arange(0,Ncols,1)
+		for i in ii:
+			rnk['k'][lasdat[:,34]==0 & pStar['k']>=pr[i] & pStar['k']<pr[i+1]] = i
+			
+		rnk['k'][lasdat[:,34]==0 & pStar['k']==1] = Ncols
+		dtemp = lasdat[lasdat[:,34]==0,:]
+		plt.scatter(dtemp[:,20],dtemp[:,11],s=Ncols,c=rnk['k'][lasdat[:,34]==0])
+		plt.xlim(-25,65)
+		plt.ylim(19.8,10.75)
+		plt.xlabel("cs_K")
+		plt.ylabel("m_K")		
+
+pStarSing = pStar
+
+#?np.sum, is.na, something here
+
+
+#########################
+##GLOBAL CLASSIFICATION##
+#########################
+
+##computing mMean
+mY = lasdat[:,5]+mmagshift['y']
+mJ = lasdat[:,7]+mmagshift['j']
+mH = lasdat[:,9]+mmagshift['h']
+mK = lasdat[:,11]+mmagshift['k']
+mDat = [mY,mJ,mH,mK]
+midxDat = [lasdat[:,31],lasdat[:,32],lasdat[:,33],lasdat[:,34]]
+
+mMean = np.zeros(len(mDat))
+ii = np.arange(0,len(mDat),1)
+for i in ii:
+	mMean[i] = SelectiveMean(mDat[i],midxDat[i])
+
+##probablity desities
+
+pa = MedPars
+mmm = np.max([(np.max(lasdat[:,5][lasdat[:,31]==0])),\
+        (np.max(lasdat[:,7][lasdat[:,32]==0])+pa[5]-pa[6]),\
+        (np.max(lasdat[:,9][lasdat[:,33]==0])+pa[5]-pa[7]),\
+        (np.max(lasdat[:,11][lasdat[:,34]==0])+pa[5]-pa[8])])
+mu = (1-(mMean)/mmm)*((pa[0]*(mMean-(pa[5]))**2 + pa[1]*(mMean-(pa[5])) + pa[2])**pa[4] + pa[3])
+mu[mu<0.01] = 0.01
+rho = VarPars.x[0]*(10**5)*(10**(VarPars.x[1]*(mMean-11)))
+
+def DensComp(dat):
+	def galoc_fun(x,csy,csj,csh,csk,idx_y,idx_j,idx_h,idx_k,mu0,rho0):
+		if idx_y==0 & idx_j==0 & idx_h==0 & idx_k==0:
+			res = dlnorm(x,np.log(mu0)-((1/2)*np.log(1 + rho0/(mu0**2))),np.sqrt(np.log(1+rho0/(mu0**2))))\
+			        *dstar(x-csy,starparas['y'])*dstar(x-csj,starparas['j'])*dstar(x-csh,starparas['h'])*dstar(x-csk,starparas['k'])
+		if idx_y==1 & idx_j==0 & idx_h==0 & idx_k==0:
+			res = dlnorm(x,np.log(mu0)-((1/2)*np.log(1 + rho0/(mu0**2))),np.sqrt(np.log(1+rho0/(mu0**2))))\
+				*dstar(x-csj,starparas['j'])*dstar(x-csh,starparas['h'])*dstar(x-csk,starparas['k'])
+		if idx_y==0 & idx_j==1 & idx_h==0 & idx_k==0:
+			res = dlnorm(x,np.log(mu0)-((1/2)*np.log(1 + rho0/(mu0**2))),np.sqrt(np.log(1+rho0/(mu0**2))))\
+				*dstar(x-csy,starparas['y'])*dstar(x-csh,starparas['h'])*dstar(x-csk,starparas['k'])
+		if idx_y==0 & idx_j==0 & idx_h==1 & idx_k==0:
+			res = dlnorm(x,np.log(mu0)-((1/2)*np.log(1 + rho0/(mu0**2))),np.sqrt(np.log(1+rho0/(mu0**2))))\
+				*dstar(x-csy,starparas['y'])*dstar(x-csj,starparas['j'])*dstar(x-csk,starparas['k'])
+		if idx_y==0 & idx_j==0 & idx_h==0 & idx_k==1:
+			res = dlnorm(x,np.log(mu0)-((1/2)*np.log(1 + rho0/(mu0**2))),np.sqrt(np.log(1+rho0/(mu0**2))))\
+			        *dstar(x-csy,starparas['y'])*dstar(x-csj,starparas['j'])*dstar(x-csh,starparas['h'])
+		if idx_y==1 & idx_j==1 & idx_h==0 & idx_k==0:
+			res = dlnorm(x,np.log(mu0)-((1/2)*np.log(1 + rho0/(mu0**2))),np.sqrt(np.log(1+rho0/(mu0**2))))\
+				*dstar(x-csh,starparas['h'])*dstar(x-csk,starparas['k'])
+		if idx_y==1 & idx_j==0 & idx_h==1 & idx_k==0:
+			res = dlnorm(x,np.log(mu0)-((1/2)*np.log(1 + rho0/(mu0**2))),np.sqrt(np.log(1+rho0/(mu0**2))))\
+				*dstar(x-csj,starparas['j'])*dstar(x-csk,starparas['k'])
+		if idx_y==1 & idx_j==0 & idx_h==0 & idx_k==1:
+			res = dlnorm(x,np.log(mu0)-((1/2)*np.log(1 + rho0/(mu0**2))),np.sqrt(np.log(1+rho0/(mu0**2))))\
+				*dstar(x-csj,starparas['j'])*dstar(x-csh,starparas['h'])
+		if idx_y==0 & idx_j==1 & idx_h==1 & idx_k==0:
+			res = dlnorm(x,np.log(mu0)-((1/2)*np.log(1 + rho0/(mu0**2))),np.sqrt(np.log(1+rho0/(mu0**2))))\
+				*dstar(x-csy,starparas['y'])*dstar(x-csk,starparas['k'])			
+		if idx_y==0 & idx_j==1 & idx_h==0 & idx_k==1:
+			res = dlnorm(x,np.log(mu0)-((1/2)*np.log(1 + rho0/(mu0**2))),np.sqrt(np.log(1+rho0/(mu0**2))))\
+				*dstar(x-csy,starparas['y'])*dstar(x-csh,starparas['h'])
+		if idx_y==0 & idx_j==0 & idx_h==1 & idx_k==1:
+			res = dlnorm(x,np.log(mu0)-((1/2)*np.log(1 + rho0/(mu0**2))),np.sqrt(np.log(1+rho0/(mu0**2))))\
+				*dstar(x-csy,starparas['y'])*dstar(x-csj,starparas['j'])
+		if idx_y==1 & idx_j==1 & idx_h==1 & idx_k==0:
+			res = dlnorm(x,np.log(mu0)-((1/2)*np.log(1 + rho0/(mu0**2))),np.sqrt(np.log(1+rho0/(mu0**2))))\
+				*dstar(x-csk,starparas['k'])		
+		if idx_y==1 & idx_j==1 & idx_h==0 & idx_k==1:
+			res = dlnorm(x,np.log(mu0)-((1/2)*np.log(1 + rho0/(mu0**2))),np.sqrt(np.log(1+rho0/(mu0**2))))\
+				*dstar(x-csh,starparas['h'])
+		if idx_y==1 & idx_j==0 & idx_h==1 & idx_k==1:
+			res = dlnorm(x,np.log(mu0)-((1/2)*np.log(1 + rho0/(mu0**2))),np.sqrt(np.log(1+rho0/(mu0**2))))\
+				*dstar(x-csj,starparas['j'])
+		if idx_y==0 & idx_j==1 & idx_h==1 & idx_k==1:
+			res = dlnorm(x,np.log(mu0)-((1/2)*np.log(1 + rho0/(mu0**2))),np.sqrt(np.log(1+rho0/(mu0**2))))\
+				*dstar(x-csy,starparas['y'])
+		return res
+	
+	n = (len(dat)-2)/2
+	x = dat[0:n]
+	miss_idx = dat[n:(2*n)]
+	mu0 = dat[(2*n)]
+	rho0 = dat[(2*n+1)]
+	if n==0 | (n-np.around(n))!=0 | np.sum(miss_idx[miss_idx!=0]!=1)>0:
+		sys.exit("Input data is in bad format!")
+	
+	def staloc_fun(x,idx_y,idx_j,idx_h,idx_k):
+		if idx_y==0 & idx_j==0 & idx_h==0 & idx_k==0:
+			res = dstar(x[0],starpars['y'])*dstar(x[1],starpars['j'])*dstar(x[2],starpars['h'])*dstar(x[3],starpars['k'])
+		if idx_y==1 & idx_j==0 & idx_h==0 & idx_k==0:
+			res = dstar(x[1],starpars['j'])*dstar(x[2],starpars['h'])*dstar(x[3],starpars['k'])
+		if idx_y==0 & idx_j==1 & idx_h==0 & idx_k==0:
+			res = dstar(x[0],starpars['y'])*dstar(x[2],starpars['h'])*dstar(x[3],starpars['k'])
+		if idx_y==0 & idx_j==0 & idx_h==1 & idx_k==0:
+			res = dstar(x[0],starpars['y'])*dstar(x[1],starpars['j'])*dstar(x[3],starpars['k'])
+		if idx_y==0 & idx_j==0 & idx_h==0 & idx_k==1:
+			res = dstar(x[0],starpars['y'])*dstar(x[1],starpars['j'])*dstar(x[2],starpars['h'])
+		if idx_y==1 & idx_j==1 & idx_h==0 & idx_k==0:
+			res = dstar(x[2],starpars['h'])*dstar(x[3],starpars['k'])
+		if idx_y==1 & idx_j==0 & idx_h==1 & idx_k==0:
+			res = dstar(x[1],starpars['j'])*dstar(x[3],starpars['k'])
+		if idx_y==1 & idx_j==0 & idx_h==0 & idx_k==1:
+			res = dstar(x[1],starpars['j'])*dstar(x[2],starpars['h'])
+		if idx_y==0 & idx_j==1 & idx_h==1 & idx_k==0:
+			res = dstar(x[0],starpars['y'])*dstar(x[3],starpars['k'])
+		if idx_y==0 & idx_j==1 & idx_h==0 & idx_k==1:
+			res = dstar(x[0],starpars['y'])*dstar(x[2],starpars['h'])
+		if idx_y==0 & idx_j==0 & idx_h==1 & idx_k==1:
+			res = dstar(x[0],starpars['y'])*dstar(x[1],starpars['j'])
+		if idx_y==1 & idx_j==1 & idx_h==1 & idx_k==0:
+			res = dstar(x[3],starpars['k'])
+		if idx_y==1 & idx_j==1 & idx_h==0 & idx_k==1:
+			res = dstar(x[2],starpars['h'])
+		if idx_y==1 & idx_j==0 & idx_h==1 & idx_k==1:
+			res = dstar(x[1],starpars['j'])
+		if idx_y==0 & idx_j==1 & idx_h==1 & idx_k==1:
+			res = dstar(x[0],starpars['y'])
+		return res
+	
+	pStar = staloc_fun(x,miss_idx[0],miss_idx[1],miss_idx[2],miss_idx[3])
+	#pStar = prod(dnorm_nozero(x[miss_idx==0]))
+	
+	pGal = integrate.quad(galoc_fun,-10,70,args=(x[0],x[1],x[2],x[3],miss_idx[0],miss_idx[1],miss_idx[2],miss_idx[3],mu0,rho0))
+	
+	res = [pStar,pGal]
+	
+	return res
+
+
+dens = np.zeros(len(mu))
+ii = np.arange(0,len(mu),1)
+for i in ii:
+	dens[i] = DensComp(lasdat[:,17][i],lasdat[:,18][i],lasdat[:,19][i],lasdat[:,20][i],lasdat[:,31][i],lasdat[:,32][i],lasdat[:,33][i],lasdat[:,34][i],mu[i],rho[i])
+
+dens = np.transpose(dens)
+idx_miss = ntotal[(lasdat[:,31]==1)&(lasdat[:,32]==1)&(lasdat[:,33]==1)&(lasdat[:,34]==1)]
+print(idx_miss) ##to check that all object have been classified
+dens[1] = MxCfGl(mMean)*dens[1]
+dens[2] = (1-MxCfGl(mMean))*dens[2]
+pStar = dens[1]/(dens[1]+dens[2])
+if np.sum((dens[1]==0)&(dens[2]==0))>0:
+	pStar[(dens[1]==0)&(dens[2]==0)] = np.repeat(0.5)
+
+np.histogram(pStar)
+
+
+Ncols = 250.0
+pr = np.arange(0,1,1/(Ncols+1))
+rnkgl = np.repeat(0.0,len(lasdat))
+ii = np.arange(0,Ncols,1)
+for i in ii:
+	rnkgl[pStar>=pr[i] & pStar<pr[i+1]] = i
+	
+rnkgl[pStar==1] = Ncols
+
+## plotting the global classification in the Y band
+dtemp = lasdat[(lasdat[:,31] == 0),:]
+plt.scatter(dtemp[:,17],dtemp[:,5],s=Ncols,c=rnkgl[lasdat[:,31]==0])
+plt.xlim(-25,65)
+plt.ylim(22.1,11.25)
+plt.xlabel("z_Y")
+plt.ylabel("m_Y")
+
+## plotting the global classification in the J band
+dtemp = lasdat[(lasdat[:,32] == 0),:]
+plt.scatter(dtemp[:,18],dtemp[:,7],s=Ncols,c=rnkgl[lasdat[:,32]==0])
+plt.xlim(-25,65)
+plt.ylim(22.1,11.25)
+plt.xlabel("z_J")
+plt.ylabel("m_J")
+
+## plotting the global classification in the H band
+dtemp = lasdat[(lasdat[:,33] == 0),:]
+plt.scatter(dtemp[:,19],dtemp[:,9],s=Ncols,c=rnkgl[lasdat[:,33]==0])
+plt.xlim(-25,65)
+plt.ylim(20.1,11.1)
+plt.xlabel("z_H")
+plt.ylabel("m_H")
+
+## plotting the global classification in the K band
+dtemp = lasdat[(lasdat[:,34] == 0),:]
+plt.scatter(dtemp[:,20],dtemp[:,11],s=Ncols,c=rnkgl[lasdat[:,34]==0])
+plt.xlim(-25,65)
+plt.ylim(19.8,10.75)
+plt.xlabel("z_K")
+plt.ylabel("m_K")
 
 print clock()-start, "seconds elapsed"

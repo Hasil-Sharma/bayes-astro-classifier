@@ -35,7 +35,7 @@ def dmag_erf(x,minit,mlim,sigma,alpha):
 				if dN(x[i],alpha) == np.inf:
 					res[i] = 0
 		return res
-	reltol = (2.220446e-16)**0.25# Not sure how to get machine numerical characteristics with Python
+	reltol = sys.float_info.epsilon**0.25
 	normc = integrate.quad(temp,-100,100,epsrel=reltol,epsabs=reltol/100)[0]
 	if np.shape(x) == ():
 		res = temp(x)/normc
